@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Expenses</title>
+<meta name="theme-color" content="#0f766e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Expenses">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#eef2f1; --card:#ffffff; --ink:#12302d; --muted:#5f7774; --line:#dbe5e3;
+  --accent:#0f766e; --accent-ink:#ffffff; --hero:#0b3d39; --hero-ink:#e8fffb; --danger:#b42318;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0c1a19; --card:#132726; --ink:#e4f2f0; --muted:#8fb0ac; --line:#21403d;
+        --accent:#2dd4bf; --accent-ink:#06211f; --hero:#0f766e; --hero-ink:#f0fffd; --danger:#ff8a80;}
+}
+*,*:before,*:after{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+body{padding:env(safe-area-inset-top) 0 calc(24px + env(safe-area-inset-bottom))}
+main{max-width:520px;margin:0 auto;padding:16px}
+.num{font-variant-numeric:tabular-nums}
+.hero{background:var(--hero);color:var(--hero-ink);border-radius:24px;padding:24px 22px 22px}
+.mrow{display:flex;align-items:center;justify-content:space-between;margin:-8px -10px 0}
+.mrow small{font-size:15px;opacity:.85}
+.nav{border:0;background:none;color:inherit;font-size:26px;line-height:1;width:44px;height:44px;border-radius:12px;cursor:pointer}
+.nav:disabled{opacity:.25;cursor:default}
+.hero .total{font-size:clamp(32px,10vw,44px);font-weight:750;letter-spacing:-.02em;margin:6px 0 4px}
+.hero .count{font-size:14px;opacity:.8}
+h2{font-size:17px;margin:26px 4px 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+label{display:block;font-size:13px;color:var(--muted);margin:0 0 6px 2px}
+input,select{width:100%;font:inherit;font-size:17px;color:var(--ink);background:var(--bg);
+  border:1px solid var(--line);border-radius:12px;padding:13px 14px;min-height:48px;appearance:none;-webkit-appearance:none}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
+.amount{font-size:26px;font-weight:700}
+.field{margin-bottom:12px}
+button.add{width:100%;min-height:52px;border:0;border-radius:14px;background:var(--accent);
+  color:var(--accent-ink);font:inherit;font-size:17px;font-weight:700;cursor:pointer}
+button.add:active{transform:scale(.99)}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)}
+li:last-child{border-bottom:0}
+.ico{width:42px;height:42px;border-radius:12px;background:var(--bg);display:grid;place-items:center;font-size:21px;flex:none}
+.mid{flex:1;min-width:0}
+.mid b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mid span{font-size:13px;color:var(--muted)}
+.amt{font-weight:700;white-space:nowrap}
+.del{border:0;background:none;color:var(--muted);font-size:20px;width:40px;height:40px;border-radius:10px;cursor:pointer}
+.del:active{color:var(--danger)}
+.empty{color:var(--muted);text-align:center;padding:18px 8px;margin:0}
+.backup{display:flex;gap:10px;margin-top:26px}
+.backup button{flex:1;min-height:46px;border:1px solid var(--line);background:var(--card);color:var(--ink);
+  border-radius:12px;font:inherit;font-size:15px;cursor:pointer}
+.hint{font-size:12px;color:var(--muted);text-align:center;margin:8px 0 0}
+</style>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <div class="mrow"><button class="nav" id="prev" type="button" aria-label="Previous month">‹</button><small id="month"></small><button class="nav" id="next" type="button" aria-label="Next month">›</button></div>
+    <div class="total num" id="total">Rp 0</div>
+    <div class="count" id="count"></div>
+  </section>
+
+  <h2>Add expense</h2>
+  <form class="card" id="form">
+    <div class="field">
+      <label for="amount">Amount (IDR)</label>
+      <input class="amount num" id="amount" inputmode="numeric" placeholder="0" required autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="category">Category</label>
+      <select id="category"></select>
+    </div>
+    <div class="field">
+      <label for="note">Note</label>
+      <input id="note" maxlength="120" placeholder="Optional" autocomplete="off">
+    </div>
+    <button class="add" type="submit">Save expense</button>
+  </form>
+
+  <h2 id="listTitle">This month</h2>
+  <div class="card" id="list"></div>
+
+  <div class="backup">
+    <button id="export" type="button">Export backup</button>
+    <button id="import" type="button">Import backup</button>
+    <input id="file" type="file" accept="application/json,.json" hidden>
+  </div>
+  <p class="hint">Data is stored on this phone. Export a backup now and then.</p>
+</main>
+
+<script>
+const CATS = {Food:"🍜", Transport:"🛵", Shopping:"🛍️", Bills:"🧾", Health:"💊", Entertainment:"🎬", Other:"📦"};
+const KEY = "expenses.v1";
+const $ = id => document.getElementById(id);
+let viewMonth = null;   // "YYYY-MM" being viewed; null = follow the calendar
+const curMonth = () => todayISO().slice(0, 7);
+const shiftMonth = (ym, n) => { const [y, m] = ym.split("-").map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; };
+
+const pad = n => String(n).padStart(2, "0");
+const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const idr = n => "Rp " + String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+function load() {
+  try { const v = JSON.parse(localStorage.getItem(KEY)); return Array.isArray(v) ? v : []; }
+  catch (e) { return []; }
+}
+function save(items) { localStorage.setItem(KEY, JSON.stringify(items)); }
+
+function render() {
+  const cur = curMonth();
+  const prefix = viewMonth || cur;
+  const isCur = prefix === cur;
+  const [vy, vm] = prefix.split("-").map(Number);
+  const items = load().filter(e => e.date.startsWith(prefix))
+    .sort((a, b) => (b.date + b.created).localeCompare(a.date + a.created));
+  const total = items.reduce((s, e) => s + e.amount, 0);
+
+  const label = new Date(vy, vm - 1, 1).toLocaleDateString("en-US", {month: "long", year: "numeric"});
+  $("month").textContent = label;
+  $("next").disabled = isCur;
+  $("listTitle").textContent = isCur ? "This month" : label;
+  $("total").textContent = idr(total);
+  $("count").textContent = `${items.length} expense${items.length === 1 ? "" : "s"}${isCur ? " this month" : ""}`;
+
+  const list = $("list");
+  list.textContent = "";
+  if (!items.length) {
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = isCur ? "No expenses yet this month. Add your first one above." : "No expenses in this month.";
+    list.appendChild(p);
+    return;
+  }
+  const ul = document.createElement("ul");
+  for (const e of items) {
+    const li = document.createElement("li");
+    const ico = document.createElement("div"); ico.className = "ico"; ico.textContent = CATS[e.category] || "📦";
+    const mid = document.createElement("div"); mid.className = "mid";
+    const b = document.createElement("b"); b.textContent = e.note || e.category;
+    const sp = document.createElement("span");
+    const d = new Date(e.date + "T00:00:00");
+    sp.textContent = `${e.category} · ${d.toLocaleDateString("en-GB", {day: "2-digit", month: "short"})}`;
+    mid.append(b, sp);
+    const amt = document.createElement("div"); amt.className = "amt num"; amt.textContent = idr(e.amount);
+    const del = document.createElement("button"); del.className = "del"; del.type = "button";
+    del.setAttribute("aria-label", "Delete expense"); del.textContent = "✕";
+    del.onclick = () => {
+      if (confirm("Delete this expense?")) { save(load().filter(x => x.id !== e.id)); render(); }
+    };
+    li.append(ico, mid, amt, del);
+    ul.appendChild(li);
+  }
+  list.appendChild(ul);
+}
+
+// setup
+for (const [name, emoji] of Object.entries(CATS)) {
+  const o = document.createElement("option"); o.value = name; o.textContent = `${emoji} ${name}`;
+  $("category").appendChild(o);
+}
+$("amount").addEventListener("input", () => {
+  const digits = $("amount").value.replace(/\D/g, "");
+  $("amount").value = digits ? idr(Number(digits)).slice(3) : "";
+});
+
+$("form").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const amount = parseInt($("amount").value.replace(/\D/g, ""), 10);
+  if (!amount) return;
+  const items = load();
+  items.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    amount, category: $("category").value, note: $("note").value.trim(),
+    date: todayISO(), created: new Date().toISOString()   // always today's date
+  });
+  save(items);
+  $("amount").value = ""; $("note").value = "";
+  viewMonth = null;
+  render();
+});
+
+$("export").onclick = () => {
+  const blob = new Blob([JSON.stringify(load(), null, 2)], {type: "application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `expenses-${todayISO()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+};
+$("import").onclick = () => $("file").click();
+$("file").onchange = async () => {
+  const f = $("file").files[0]; if (!f) return;
+  try {
+    const incoming = JSON.parse(await f.text());
+    if (!Array.isArray(incoming)) throw new Error("bad file");
+    const items = load(), have = new Set(items.map(x => x.id));
+    let added = 0;
+    for (const e of incoming) {
+      if (e && e.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(e.date || "")) {
+        const id = e.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        if (!have.has(id)) {
+          items.push({id, amount: Number(e.amount), category: CATS[e.category] ? e.category : "Other",
+                      note: String(e.note || ""), date: e.date, created: String(e.created || e.date)});
+          added++;
+        }
+      }
+    }
+    save(items); render(); alert(`Imported ${added} expense${added === 1 ? "" : "s"}.`);
+  } catch (err) { alert("That file isn't a valid expenses backup."); }
+  $("file").value = "";
+};
+
+$("prev").onclick = () => { viewMonth = shiftMonth(viewMonth || curMonth(), -1); render(); };
+$("next").onclick = () => { const n = shiftMonth(viewMonth || curMonth(), 1); viewMonth = n >= curMonth() ? null : n; render(); };
+// follow the calendar: when the app is reopened or a new day/month starts, jump to the current month
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { viewMonth = null; render(); } });
+setInterval(() => { if (!viewMonth) render(); }, 60000);
+
+render();
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
